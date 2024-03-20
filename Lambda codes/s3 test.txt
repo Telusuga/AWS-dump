@@ -1,0 +1,35 @@
+import json
+import pandas as pd
+import boto3
+import random
+
+bucket = "suryatestbucket"
+file_name = "employees.csv"
+s3 = boto3.client('s3') 
+
+def lambda_handler(event, context):
+    # TODO implement
+    obj = s3.get_object(Bucket= bucket, Key= file_name) 
+    # get object and file (key) from bucket
+
+    initial_df = pd.read_csv(obj['Body']) # 'Body' is a key word
+    json_data=initial_df.to_dict('list')
+    index=random.randint(0,50)
+    final_data={}
+    final_data['EMPLOYEE_ID']=json_data['EMPLOYEE_ID'][index]
+    final_data['FIRST_NAME']=json_data['FIRST_NAME'][index]
+    final_data['LAST_NAME']=json_data['LAST_NAME'][index]
+    final_data['EMAIL']=json_data['EMAIL'][index]
+    final_data['PHONE_NUMBER']=json_data['PHONE_NUMBER'][index]
+    final_data['HIRE_DATE']=json_data['HIRE_DATE'][index]
+    final_data['JOB_ID']=json_data['JOB_ID'][index]
+    final_data['SALARY']=json_data['SALARY'][index]
+    final_data['COMMISSION_PCT']=json_data['COMMISSION_PCT'][index]
+    final_data['MANAGER_ID']=json_data['MANAGER_ID'][index]
+    final_data['DEPARTMENT_ID']=json_data['DEPARTMENT_ID'][index]
+    
+    
+    return final_data
+    
+
+

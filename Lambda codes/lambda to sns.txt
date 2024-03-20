@@ -1,0 +1,16 @@
+import json
+import boto3
+
+def lambda_handler(event, context):
+    # TODO implement
+    arn='arn:aws:sns:ap-south-1:739688330455:sns-topic'
+    sns=boto3.client('sns')
+    
+    
+    mes=sns.publish(
+        TargetArn=arn,
+        Message='This is a message from Lambda',
+        MessageStructure='text'
+        )
+        
+    print(mes)

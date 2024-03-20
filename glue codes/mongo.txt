@@ -1,0 +1,97 @@
+import sys
+from awsglue.transforms import *
+from awsglue.utils import getResolvedOptions
+from pyspark.context import SparkContext
+from awsglue.context import GlueContext
+from awsglue.job import Job
+from awsglue.dynamicframe import DynamicFrame
+import os
+
+## @params: [JOB_NAME]
+args = getResolvedOptions(sys.argv, ['JOB_NAME'])
+
+
+sc = SparkContext()
+glueContext = GlueContext(sc)
+spark = glueContext.spark_session
+job = Job(glueContext)
+job.init(args['JOB_NAME'], args)
+
+complaintDF=glueContext.create_dynamic_frame.from_catalog(
+                database='b1-glue-catalog-db',
+                table_name='mongo_inbox',
+                transformation_ctx='mongo_v1'
+            )
+            
+complaintdataframe=complaintDF.toDF()
+
+print(complaintdataframe.printSchema())
+
+dyf = glueContext.create_dynamic_frame.from_options(
+    connection_type="dynamodb",
+    connection_options={"dynamodb.input.tableName": "fc_data",
+        "dynamodb.throughput.read.percent": "1.0",
+        "dynamodb.splits": "100"
+    }
+)
+
+DynamoDF=dyf.toDF()
+inserting_data_frame=None
+bucket_name='mongo-api-s3'
+
+if DynamoDF.count()==0:
+    print('The DynamoDB is empty and inserting raw data!!')
+    inserting_data_frame=complaintdataframe
+    print('Initial Data load is successful')
+    
+else:
+    print('The existing records in DynamoDB')
+    print(DynamoDF.show())
+    print(DynamoDF.printSchema())
+    
+    print('Renaming the column complaint_id to COM_ID')
+    renamedDynamoDF=DynamoDF.withColumnRenamed('complaint_id','COM_ID')
+    print(renamedDynamoDF.printSchema())
+    
+    print('Joining renamed Data frame and complaints dataframe')
+    joinedDF=complaintdataframe.join(DynamoDF,complaintdataframe.complaint_id==DynamoDF.complaint_id,'left')
+    print(joinedDF.show())
+    
+    print('Printing joined data frame')
+    joinedDF.show()
+    
+    print('Selecting only columns with null value')
+    joinedDF=joinedDF.where(joinedDF.COM_ID.isNull())
+    joinedDF.show()
+    
+    print('dropping the column')
+    joinedDF=joinedDF.drop(joinedDF.COM_ID)
+    joinedDF.show()
+    
+    inserting_data_frame=joinedDF
+    
+    
+final_DF=DynamicFrame.fromDF(inserting_data_frame,glueContext,'inserting_data_frame')
+
+try:
+    glueContext.write_dynamic_frame_from_options(
+            frame=final_DF,
+            connection_type="dynamodb",
+            connection_options={"dynamodb.output.tableName": "fc_data",
+                "dynamodb.throughput.write.percent": "1.0",
+            }
+        )
+        
+    print('Data load into Dynamo DB is successfull')
+        
+    
+except Exception as err:
+    print('The following load is failed due to',str(err))
+
+print('Moving files into archive')    
+os.system(f'aws s3 sync s3://{bucket_name}/inbox s3://{bucket_name}/archive')
+print('file movement successfull')
+
+os.system(f'aws s3 rm s3://{bucket_name}/inbox/ --recursive')   
+            
+job.commit() 

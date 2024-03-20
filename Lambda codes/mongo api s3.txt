@@ -1,0 +1,76 @@
+import pymongo
+import datetime
+import requests
+import json
+import random
+import boto3
+
+s3=boto3.client('s3')
+bucket_name='mongo-api-s3'
+
+
+
+client=pymongo.MongoClient('mongodb+srv://surya:kAa82TKkIWzx2Qrv@cluster0.2qpyi1v.mongodb.net/?retryWrites=true&w=majority')
+
+database='finance'
+collection='complaint'
+
+DB=client[database]
+col=DB[collection]
+
+def getting_values_from_mongo():
+    cur=col.find().sort('from_date',-1).limit(1)
+    c=list(cur)
+    from_d='2023-01-01'
+    if len(c)!=0:
+        from_d=c[0]['to_date']
+    to_d=datetime.datetime.now().date()
+    to_d=datetime.datetime.strftime(to_d,'%Y-%m-%d')
+    return{
+        'from_date':from_d,
+        'to_date':to_d
+    }
+
+def pushing_data_to_mongo():
+    print('Insert operation in progress!!')
+    res=getting_values_from_mongo()
+    t=col.insert_one(res)
+    print('Insert operation is successful')
+    
+
+
+def lambda_handler(event, context):
+    # TODO implement
+    
+    url=f'https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?date_received_max=<to_date>&date_received_min=<from_date>&field=all'
+    print(url)
+    res=getting_values_from_mongo()
+
+    from_date=res['from_date']
+    to_date=res['to_date']
+    print(from_date, to_date)
+
+    URL=url.replace('<to_date>',to_date).replace('<from_date>',from_date)
+    print(URL)
+    final_url=requests.get(URL)
+    print(final_url.content)
+    r=json.loads(final_url.content)
+    output=[]
+    for i in r['hits']['hits']:
+        output.append(i['_source'])
+        
+    index=random.randint(0,20)
+    g=output[index]
+    
+    dt=datetime.datetime.now()
+    print('Data dump in progress!!')
+    s3.put_object(Body=json.dumps(g), Bucket=bucket_name, Key=f'{str(dt)}_api.json') 
+    print('Data Transfer successful')
+    if g is not None:
+        print('Data push to mongo in progress')
+        pushing_data_to_mongo()
+        print('Data push to mongo success')
+    else:
+        print('check cheyi')
+    
+    return g

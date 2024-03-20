@@ -1,0 +1,19 @@
+import json
+import boto3
+import datetime
+
+BUCKET_NAME="employees-details-lambda"
+
+def lambda_handler(event, context):
+    print(event)
+    print(event['responsePayload'])
+    current_value=event['responsePayload']
+    print('Data Transfer to S3 started')
+    s3=boto3.resource('s3')
+    current_epoch_time=datetime.datetime.now().timestamp()
+    s3obj=s3.Object(BUCKET_NAME,f'inbox/{str(current_epoch_time)}_employee_data.json')
+    s3obj.put(
+        Body=(bytes(json.dumps(current_value).encode('UTF-8')))
+        )
+        
+    print('Data Transfer successful to ')

@@ -1,0 +1,24 @@
+import json
+import pandas as pd
+import boto3
+
+s3=boto3.client('s3')
+
+def lambda_handler(event, context):
+    # TODO implement
+    print(event)
+    bucket_name=event['Records'][0]['s3']['bucket']['name']
+    object_name=event['Records'][0]['s3']['object']['key']
+    if event['Records'][0]=='ObjectCreated:Put':
+        print('The object inserted into the bucket:',bucket_name)
+        print('The object name is:',object_name)
+    else:
+        print('The object removed from the bucket:',bucket_name)
+        print('The object removed is:',object_name)
+        
+    res=s3.get_object(Bucket='suryatestbucket', Key='department.csv')
+    print(res['Body'])
+    df=pd.read_csv(res['Body'])
+    print(df.head())
+        
+    

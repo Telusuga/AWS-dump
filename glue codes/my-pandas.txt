@@ -1,0 +1,92 @@
+import sys
+from awsglue.transforms import *
+from awsglue.utils import getResolvedOptions
+from pyspark.context import SparkContext
+from awsglue.context import GlueContext
+from awsglue.job import Job
+from awsglue.dynamicframe import DynamicFrame
+
+## @params: [JOB_NAME]
+args = getResolvedOptions(sys.argv, ['JOB_NAME'])
+
+sc = SparkContext()
+glueContext = GlueContext(sc)
+spark = glueContext.spark_session
+job = Job(glueContext)
+job.init(args['JOB_NAME'], args)
+
+empDf=glueContext.create_dynamic_frame.from_catalog(
+    database='testing',
+    table_name='input_emp_input',
+    transformation_ctx='emp_json_test_pandas'
+    )
+    
+empDf.printSchema()
+
+normalempDf=empDf.toDF()
+
+dyf = glueContext.create_dynamic_frame.from_options(
+    connection_type="dynamodb",
+    connection_options={"dynamodb.input.tableName": "test",
+        "dynamodb.throughput.read.percent": "1.0",
+        "dynamodb.splits": "100"
+    }
+)
+
+dynamoDF=dyf.toDF()
+resultDF=None
+
+if dynamoDF.count()==0:
+    print('The DynamoDB table employee_data is empty!!')
+    print('Inserting data into dynamoDB')
+    resultDF=normalempDf
+    print('Data is inserted')
+    resultDF.show()
+    
+else:
+    print('The existing data in dynamoDB is')
+    dynamoDF.show()
+    
+    print('renaming the column for incremental load')
+    renamedColDF=dynamoDF.withColumnRenamed('EMPLOYEE_ID','EMP_ID')
+    
+    print('Joining the 2 dataframes for checking incremental data')
+    joinedDF=normalempDf.join(renamedColDF,normalempDf.EMPLOYEE_ID==renamedColDF.EMP_ID,'left').select(normalempDf.EMPLOYEE_ID,normalempDf.FIRST_NAME,normalempDf.LAST_NAME,normalempDf.EMAIL,normalempDf.PHONE_NUMBER,normalempDf.HIRE_DATE,normalempDf.JOB_ID,normalempDf.SALARY,normalempDf.COMMISSION_PCT,normalempDf.MANAGER_ID,normalempDf.DEPARTMENT_ID,renamedColDF.EMP_ID)
+    
+    print('checking the resultant joined DataFrame')
+    joinedDF.show()
+    
+    print('performing the null operation')
+    joinedDF=joinedDF.where(joinedDF.EMP_ID.isNull())
+    
+    print('dropping the colunm from dynamoDF column to in sert into dynamo db')
+    joinedDF=joinedDF.drop(joinedDF.EMP_ID)
+    
+    print('The incremental data is')
+    joinedDF.show()
+    
+    resultDF=joinedDF
+    
+    
+resultantDF=DynamicFrame.fromDF(resultDF,glueContext,'resultDF')
+    
+    
+try:
+    glueContext.write_dynamic_frame_from_options(
+            frame=resultantDF,
+            connection_type="dynamodb",
+            connection_options={"dynamodb.output.tableName": "test",
+                "dynamodb.throughput.write.percent": "1.0",
+                "dynamodb.action": "Append"
+            }
+        )
+        
+    print('Data load into Dynamo DB is successfull')
+        
+    
+except Exception as err:
+    print('The following load is failed due to',str(err))
+        
+
+
+job.commit()

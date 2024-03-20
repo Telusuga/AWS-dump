@@ -1,0 +1,21 @@
+import json
+import boto3
+s3=boto3.resource('s3')
+
+def summing(a,b):
+    return a+b
+
+def lambda_handler(event, context):
+    # TODO implement
+    print(event)
+    #print(context)
+    #print('This is my first function')
+    #print('The sum of 2 numbers is',summing(2,2))
+    #bucket=s3.Bucket('suryatestbucket')
+    #print(bucket.objects.all())
+    
+    #for i in bucket.objects.all():
+    #    key=i.key
+    #   print(key)
+    
+     

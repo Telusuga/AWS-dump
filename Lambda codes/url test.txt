@@ -1,0 +1,45 @@
+import json
+import requests
+import random
+import pymongo
+import datetime
+
+client=pymongo.MongoClient('mongodb+srv://surya:kAa82TKkIWzx2Qrv@cluster0.2qpyi1v.mongodb.net/?retryWrites=true&w=majority')
+
+database='finance'
+collection='complaint'
+
+DB=client[database]
+col=DB[collection]
+
+def getting_values_from_mongo():
+    cur=col.find().sort('from_date',-1).limit(1)
+    c=list(cur)
+    from_d='2023-01-01'
+    if len(c)!=0:
+        from_d=c[0]['to_date']
+    to_d=datetime.datetime.now().date()
+    to_d=datetime.datetime.strftime(to_d,'%Y-%m-%d')
+    return{
+        'from_date':from_d,
+        'to_date':to_d
+    }
+
+    
+
+def lambda_handler(event, context):
+    # TODO implement
+    url=f'https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?date_received_max=<to_date>&date_received_min=<from_date>&field=all'
+    print(url)
+    res=getting_values_from_mongo()
+
+    from_date=res['from_date']
+    to_date=res['to_date']
+    print(from_date, to_date)
+
+    URL=url.replace('<to_date>',to_date).replace('<from_date>',from_date)
+    print(URL)
+    final_url=requests.get(URL)
+    print(final_url.content)
+    r=json.loads(final_url.content)
+    return to_date

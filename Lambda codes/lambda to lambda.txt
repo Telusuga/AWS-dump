@@ -1,0 +1,18 @@
+import json
+import boto3
+import datetime
+
+bucket_name='output-test0305'
+s3=boto3.client('s3')
+
+def lambda_handler(event, context):
+    # TODO implement
+    print(event)
+    print(event['responsePayload'])
+    value=event['responsePayload']
+    dt=datetime.datetime.now()
+    s3.put_object(Body=json.dumps(value), Bucket=bucket_name, Key=f'input/{str(dt)}_employee.json')
+    
+    print('Data transfer successful')
+    
+    
